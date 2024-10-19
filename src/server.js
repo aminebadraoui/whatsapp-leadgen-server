@@ -1,8 +1,7 @@
 const express = require('express');
 const http = require('http');
 const https = require('https');
-const WebSocket = require('ws');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const fs = require('fs');
@@ -11,27 +10,9 @@ const prisma = new PrismaClient();
 const app = express();
 
 
-let httpServer;
-if (process.env.NODE_ENV === 'production') {
-    const privateKey = fs.readFileSync('/etc/letsencrypt/live/leadchatapp.com/privkey.pem', 'utf8');
-    const certificate = fs.readFileSync('/etc/letsencrypt/live/leadchatapp.com/cert.pem', 'utf8');
-    const ca = fs.readFileSync('/etc/letsencrypt/live/leadchatapp.com/chain.pem', 'utf8');
-
-    const credentials = { key: privateKey, cert: certificate, ca: ca };
-
-    console.log(`privateKey ${privateKey}`)
-    console.log(`certificate ${certificate}`)
-    console.log(`ca ${ca}`)
-    console.log(`credentials ${credentials}`)
-    httpServer = https.createServer(credentials, app);
-} else {
-    httpServer = http.createServer(app);
-}
-
-const wss = new WebSocket.Server({ server: httpServer });
-
 let client;
 let isAuthenticated = false;
+let clientReady = false;
 
 app.use(cors({
     origin: '*', // Replace with your frontend URL
@@ -42,130 +23,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize WhatsApp client
-
-let clientReady = false;
-
-async function initializeClient() {
-    console.log('Starting new WhatsApp client initialization...');
-
-    try {
-        if (process.env.NODE_ENV === 'production') {
-            client = new Client({
-                authStrategy: new LocalAuth(),
-                puppeteer: {
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                    executablePath: '/usr/bin/chromium'
-                }
-            });
-
-        } else {
-            client = new Client({
-                authStrategy: new LocalAuth(),
-                puppeteer: {
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                }
-            });
-        }
-
-        console.log('Puppeteer browser launched successfully');
-
-
-
-        client.on('qr', (qr) => {
-            console.log('QR RECEIVED', qr);
-            wss.clients.forEach((ws) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'qr', qr }));
-                }
-            });
-        });
-
-        client.on('ready', () => {
-            console.log('WhatsApp client is ready!');
-            clientReady = true;
-            wss.clients.forEach((ws) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'whatsapp_ready' }));
-                }
-            });
-        });
-
-        client.on('authenticated', () => {
-            console.log('WhatsApp client authenticated');
-            isAuthenticated = true;
-        });
-
-        client.on('auth_failure', (msg) => {
-            console.error('WhatsApp authentication failure:', msg);
-            isAuthenticated = false;
-        });
-
-        client.on('disconnected', async (reason) => {
-            console.log('WhatsApp client was disconnected', reason);
-            clientReady = false;
-            isAuthenticated = false;
-
-            setTimeout(initializeClient, 5000);
-        });
-
-        console.log('Calling client.initialize()...');
-        await client.initialize();
-        console.log('WhatsApp client initialized');
-    } catch (error) {
-        console.error('Error initializing WhatsApp client:', error);
-
-        setTimeout(initializeClient, 5000);
-    }
-}
-
-async function getGroups() {
-    if (!client || !client.pupPage) {
-        throw new Error('Client not ready');
-    }
-
-    const chats = await client.getChats();
-    const groups = chats
-        .filter(chat => chat.isGroup)
-        .map(group => ({ id: group.id._serialized, name: group.name }));
-
-    return {
-        groups: groups,
-        totalGroups: groups.length
-    };
-}
-
-async function getGroupMembers(groupId) {
-    if (!client || !client.pupPage) {
-        throw new Error('Client not ready');
-    }
-
-    const chat = await client.getChatById(groupId);
-    if (!chat.isGroup) {
-        throw new Error('Not a group chat');
-    }
-
-    const participants = await chat.participants;
-    const members = await Promise.all(participants.map(async (participant) => {
-        const contact = await client.getContactById(participant.id._serialized);
-        return {
-            id: contact.id._serialized,
-            name: contact.name || contact.pushname || 'Unknown',
-            phoneNumber: contact.number
-        };
-    }));
-
-    return {
-        members: members,
-        totalMembers: members.length
-    };
-}
-
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
 
 // REST API endpoints
-
 
 app.get('/', async (req, res) => {
     res.json({ message: 'Welcome to the WhatsApp Lead Generation API' });
@@ -377,84 +240,7 @@ app.get('/api/client-status', (req, res) => {
     });
 });
 
-wss.on('headers', (headers, req) => {
-    headers.push('Access-Control-Allow-Origin: *');
+app.listen(5000, () => {
+    console.log('Server is running on port 5000');
 });
-
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection established');
-
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
-
-    ws.on('close', () => {
-        console.log('WebSocket connection closed');
-    });
-
-    console.log('Current isAuthenticated status:', isAuthenticated);
-    console.log('Current clientReady status:', clientReady);
-    console.log('WhatsApp client status:', client ? 'Initialized' : 'Not initialized');
-
-    if (isAuthenticated && clientReady) {
-        console.log('Client already authenticated and ready, sending authenticated message');
-        ws.send(JSON.stringify({ type: 'whatsapp_ready', authenticated: true }));
-    } else {
-        console.log('Client not authenticated or not ready, waiting for WhatsApp client initialization');
-    }
-
-    ws.on('message', async (message) => {
-        console.log('Received message:', message);
-        const data = JSON.parse(message);
-
-        if (data.action === 'getGroups') {
-            try {
-                const groupsData = await getGroups();
-                console.log('Sending groups data:', groupsData);
-                ws.send(JSON.stringify({ action: 'groupsReceived', ...groupsData }));
-            } catch (error) {
-                console.error('Error getting groups:', error);
-                ws.send(JSON.stringify({ action: 'error', message: 'Error retrieving groups' }));
-            }
-        }
-
-        if (data.action === 'getGroupMembers') {
-            try {
-                const { groupId } = data;
-                const membersData = await getGroupMembers(groupId);
-                console.log('Sending group members data:', membersData);
-                ws.send(JSON.stringify({ action: 'groupMembersReceived', ...membersData }));
-            } catch (error) {
-                console.error('Error getting group members:', error);
-                ws.send(JSON.stringify({ action: 'error', message: 'Error retrieving group members' }));
-            }
-        }
-    });
-});
-
-
-function startServer() {
-    try {
-        console.log('Initializing WhatsApp client...');
-        initializeClient();
-
-        const PORT = process.env.PORT || 5000;
-
-        httpServer.listen(PORT, '0.0.0.0', () => {
-            const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-            const wsProtocol = process.env.NODE_ENV === 'production' ? 'wss' : 'ws';
-            const host = httpServer.address().address;
-            const runningPort = httpServer.address().port;
-
-            console.log(`HTTP server is running at ${protocol}://${host}:${runningPort}`);
-            console.log(`WebSocket server is available at ${wsProtocol}://${host}:${runningPort}`);
-        });
-
-    } catch (err) {
-        console.error('Error starting server:', err);
-        process.exit(1);
-    }
-}
-
-startServer();
 
