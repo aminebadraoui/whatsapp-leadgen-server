@@ -10,7 +10,6 @@ generator client {
 model User {
   id               String            @id @default(auto()) @map("_id") @db.ObjectId
   email            String            @unique
-  stripeCustomerId String            @unique
   product          String
   productId        String
   createdAt        DateTime          @default(now())

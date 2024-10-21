@@ -3,15 +3,16 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const https = require('https');
-const stripeRoutes = require('./routes/stripe');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
+
+const stripeRoutes = require('./routes/stripe');
+const authRoutes = require('./routes/auth');
+
 const prisma = new PrismaClient();
 
 const app = express();
 
-
-let client;
 let isAuthenticated = false;
 let clientReady = false;
 
@@ -21,7 +22,14 @@ app.use(cors({
     allowedHeaders: ['Content-Type']
 }));
 
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf) => {
+        if (req.originalUrl.startsWith('/api/stripe/webhook')) {
+            req.rawBody = buf.toString();
+        }
+    },
+}));
+
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
@@ -30,7 +38,10 @@ app.use((req, res, next) => {
 });
 
 // Stripe endpoints
-app.use('/api/stripe', stripeRoutes);
+app.use('/api/stripe/', stripeRoutes);
+
+// Auth endpoints
+app.use('/api/auth', authRoutes);
 
 // REST API endpoints
 
@@ -200,40 +211,6 @@ app.delete('/api/message-templates/:id', async (req, res) => {
     } catch (error) {
         console.error('Error deleting message template:', error);
         res.status(500).json({ error: 'Error deleting message template' });
-    }
-});
-
-// Send a message to a contact
-app.post('/api/send-message', async (req, res) => {
-    try {
-        const { contactId, message } = req.body;
-
-        if (!clientReady) {
-            return res.status(503).json({ error: 'WhatsApp client is not ready' });
-        }
-
-        const contact = await prisma.contact.findUnique({
-            where: { id: contactId }
-        });
-
-        if (!contact) {
-            return res.status(404).json({ error: 'Contact not found' });
-        }
-
-        const chatId = contact.phoneNumber.includes('@c.us')
-            ? contact.phoneNumber
-            : `${contact.phoneNumber.replace(/[^\d]/g, '')}@c.us`;
-
-        console.log('Sending message to:', chatId);
-        console.log('Message content:', message);
-
-        const sentMessage = await client.sendMessage(chatId, message);
-        console.log('Message sent, response:', sentMessage);
-
-        res.json({ success: true, message: 'Message sent successfully', messageId: sentMessage.id._serialized });
-    } catch (error) {
-        console.error('Error sending message:', error);
-        res.status(500).json({ error: 'Error sending message', details: error.message });
     }
 });
 

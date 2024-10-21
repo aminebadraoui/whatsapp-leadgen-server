@@ -1,16 +1,14 @@
 const express = require('express');
 const Stripe = require('stripe');
+const { PrismaClient } = require('@prisma/client');
+const { generateToken, sendMagicLink } = require('../utils/auth');
+
 const router = express.Router();
-
-// Check if the STRIPE_SECRET_KEY is set
-if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error('STRIPE_SECRET_KEY is not set in the environment variables');
-}
-
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const prisma = new PrismaClient();
 
 router.post('/create-checkout-session', async (req, res) => {
-    const { priceId } = req.body; // Changed from productId to priceId
+    const { priceId } = req.body;
     console.log('Creating checkout session for price:', priceId);
 
     try {
@@ -18,7 +16,7 @@ router.post('/create-checkout-session', async (req, res) => {
             payment_method_types: ['card'],
             line_items: [
                 {
-                    price: priceId, // Use the Price ID directly here
+                    price: priceId,
                     quantity: 1,
                 },
             ],
@@ -35,31 +33,91 @@ router.post('/create-checkout-session', async (req, res) => {
     }
 });
 
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-    console.log("webhook", req.body)
+router.post('/webhook', async (req, res) => {
+    const event = req.body;
     const sig = req.headers['stripe-signature'];
-    let event;
 
     try {
-        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-        console.log("event", event)
+        const verifiedEvent = stripe.webhooks.constructEvent(
+            req.rawBody,
+            sig,
+            process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        switch (verifiedEvent.type) {
+            case 'checkout.session.completed':
+                await handleCheckoutSessionCompleted(verifiedEvent.data.object);
+                break;
+            case 'checkout.session.expired':
+                await handleCheckoutSessionExpired(verifiedEvent.data.object);
+                break;
+            case 'checkout.session.async_payment_succeeded':
+                await handleCheckoutSessionAsyncPaymentSucceeded(verifiedEvent.data.object);
+                break;
+            case 'checkout.session.async_payment_failed':
+                await handleCheckoutSessionAsyncPaymentFailed(verifiedEvent.data.object);
+                break;
+            default:
+                console.log(`Unhandled event type ${verifiedEvent.type}`);
+        }
+
+        res.json({ received: true });
     } catch (err) {
+        console.error('Webhook Error:', err.message);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-
-    if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        console.log("session", session)
-
-        // Create account and set product type
-        await createAccount(session);
-    }
-
-    res.json({ received: true });
 });
 
-async function createAccount(session) {
-    console.log("create account", session)
+async function handleCheckoutSessionCompleted(session) {
+    try {
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+        const priceId = lineItems.data[0].price.id;
+        const product = await stripe.products.retrieve(lineItems.data[0].price.product);
+
+        const user = await prisma.user.create({
+            data: {
+                email: session.customer_details.email,
+                product: product.name,
+                productId: product.id
+            }
+        });
+
+        const token = generateToken(user.id);
+        await sendMagicLink(user.email, token);
+
+        console.log(`New user created: ${user.email}`);
+    } catch (error) {
+        console.error('Error handling checkout.session.completed:', error);
+    }
+}
+
+async function handleCheckoutSessionExpired(session) {
+    try {
+        console.log(`Checkout session expired for session ID: ${session.id}`);
+        // You can add additional logic here, such as cleaning up any pending orders or notifying the user
+    } catch (error) {
+        console.error('Error handling checkout.session.expired:', error);
+    }
+}
+
+async function handleCheckoutSessionAsyncPaymentSucceeded(session) {
+    try {
+        console.log(`Async payment succeeded for session ID: ${session.id}`);
+        // This event is similar to checkout.session.completed for async payments
+        // You may want to handle it similarly or add specific logic for async payments
+        await handleCheckoutSessionCompleted(session);
+    } catch (error) {
+        console.error('Error handling checkout.session.async_payment_succeeded:', error);
+    }
+}
+
+async function handleCheckoutSessionAsyncPaymentFailed(session) {
+    try {
+        console.log(`Async payment failed for session ID: ${session.id}`);
+        // You can add logic here to handle failed async payments, such as notifying the user or updating your database
+    } catch (error) {
+        console.error('Error handling checkout.session.async_payment_failed:', error);
+    }
 }
 
 module.exports = router;

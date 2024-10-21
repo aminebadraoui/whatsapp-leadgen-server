@@ -1,21 +1,39 @@
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
+
 
 const generateToken = (userId) => {
+    console.log('Generating token for user:', userId);
     return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 };
 
+const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET
+);
+
+oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN
+});
+
+
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
+    service: 'gmail',
     auth: {
+        type: 'OAuth2',
         user: 'contact@leadchatapp.com',
-        pass: process.env.EMAIL_PASSWORD
+        clientId: process.env.GMAIL_CLIENT_ID,
+        clientSecret: process.env.GMAIL_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+        accessToken: oauth2Client.getAccessToken(),
     }
 });
 
 const sendMagicLink = async (email, token) => {
+    console.log('Sending magic link to:', email);
+    console.log('Token:', token);
+
     const magicLink = `${process.env.CLIENT_URL}/auth?token=${token}`;
 
     try {
