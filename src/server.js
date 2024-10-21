@@ -1,10 +1,11 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const https = require('https');
-
+const stripeRoutes = require('./routes/stripe');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const fs = require('fs');
 const prisma = new PrismaClient();
 
 const app = express();
@@ -27,6 +28,9 @@ app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
+
+// Stripe endpoints
+app.use('/api/stripe', stripeRoutes);
 
 // REST API endpoints
 
