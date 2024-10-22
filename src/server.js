@@ -4,6 +4,8 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 
 const stripeRoutes = require('./routes/stripe');
@@ -219,6 +221,39 @@ app.get('/api/client-status', (req, res) => {
         isReady: clientReady,
         isAuthenticated: isAuthenticated
     });
+});
+
+// Whatsapp Auth endpoints
+
+app.get('/api/whatsapp-auth/:session', (req, res) => {
+    const { session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+
+    if (fs.existsSync(sessionPath)) {
+        res.sendFile(sessionPath);
+    } else {
+        res.status(404).json({ exists: false });
+    }
+});
+
+app.post('/api/whatsapp-auth/:session', (req, res) => {
+    const { session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+
+    fs.writeFileSync(sessionPath, req.body.data);
+    res.status(200).json({ message: 'Session saved successfully' });
+});
+
+app.delete('/api/whatsapp-auth/:session', (req, res) => {
+    const { session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+
+    if (fs.existsSync(sessionPath)) {
+        fs.unlinkSync(sessionPath);
+        res.status(200).json({ message: 'Session deleted successfully' });
+    } else {
+        res.status(404).json({ message: 'Session not found' });
+    }
 });
 
 app.listen(5000, () => {
