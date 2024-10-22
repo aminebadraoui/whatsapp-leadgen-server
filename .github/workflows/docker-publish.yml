@@ -25,7 +25,13 @@ jobs:
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/whatsapp-leadgen-server:prod
         build-args: |
           DATABASE_URL=${{ secrets.DATABASE_URL }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          CLIENT_URL=${{ secrets.CLIENT_URL }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
+          GMAIL_CLIENT_ID=${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET=${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN=${{ secrets.GMAIL_REFRESH_TOKEN }}
           NODE_ENV=production
 
     - name: Build and push development Docker image
