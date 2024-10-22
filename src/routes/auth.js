@@ -24,7 +24,7 @@ router.post('/verify-token', async (req, res) => {
         // Generate a new token for the authenticated session
         const sessionToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-        res.json({ token: sessionToken, user: { email: user.email, product: user.product } });
+        res.json({ token: sessionToken, user: { email: user.email, userId: user.id } });
     } catch (error) {
         res.status(401).json({ error: 'Invalid or expired token' });
     }
