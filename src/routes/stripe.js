@@ -74,18 +74,33 @@ async function handleCheckoutSessionCompleted(session) {
         const priceId = lineItems.data[0].price.id;
         const product = await stripe.products.retrieve(lineItems.data[0].price.product);
 
-        const user = await prisma.user.create({
-            data: {
-                email: session.customer_details.email,
-                product: product.name,
-                productId: product.id
-            }
-        });
+        const email = session.customer_details.email;
+        let user = await prisma.user.findUnique({ where: { email } });
+
+        if (user) {
+            // User exists, update their purchases
+            user = await prisma.user.update({
+                where: { email },
+                data: {
+                    purchases: {
+                        push: product.id
+                    }
+                }
+            });
+        } else {
+            // User doesn't exist, create a new user
+            user = await prisma.user.create({
+                data: {
+                    email: email,
+                    purchases: [product.id]
+                }
+            });
+        }
 
         const token = generateToken(user.id);
         await sendMagicLink(user.email, token);
 
-        console.log(`New user created: ${user.email}`);
+        console.log(`User updated/created: ${user.email}`);
     } catch (error) {
         console.error('Error handling checkout.session.completed:', error);
     }

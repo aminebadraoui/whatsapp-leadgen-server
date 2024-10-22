@@ -10,8 +10,7 @@ generator client {
 model User {
   id               String            @id @default(auto()) @map("_id") @db.ObjectId
   email            String            @unique
-  product          String
-  productId        String
+  purchases        String[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   buckets          Bucket[]
