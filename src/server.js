@@ -225,14 +225,14 @@ app.get('/api/client-status', (req, res) => {
 
 // Whatsapp Auth endpoints
 
-app.get('/api/whatsapp-auth/:userId/:session', async (req, res) => {
-    const { userId, session } = req.params;
+app.post('/api/whatsapp-auth/session-exists', async (req, res) => {
+    const { userId, session } = req.body;
     const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${userId}_${session}.zip`);
 
     if (fs.existsSync(sessionPath)) {
-        res.sendFile(sessionPath);
+        res.json({ exists: true });
     } else {
-        res.status(404).json({ exists: false });
+        res.json({ exists: false });
     }
 });
 
