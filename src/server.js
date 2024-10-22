@@ -225,9 +225,9 @@ app.get('/api/client-status', (req, res) => {
 
 // Whatsapp Auth endpoints
 
-app.get('/api/whatsapp-auth/:session', (req, res) => {
-    const { session } = req.params;
-    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+app.get('/api/whatsapp-auth/:userId/:session', async (req, res) => {
+    const { userId, session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${userId}_${session}.zip`);
 
     if (fs.existsSync(sessionPath)) {
         res.sendFile(sessionPath);
@@ -236,23 +236,45 @@ app.get('/api/whatsapp-auth/:session', (req, res) => {
     }
 });
 
-app.post('/api/whatsapp-auth/:session', (req, res) => {
-    const { session } = req.params;
-    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+app.post('/api/whatsapp-auth/:userId/:session', async (req, res) => {
+    const { userId, session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${userId}_${session}.zip`);
 
     fs.writeFileSync(sessionPath, req.body.data);
     res.status(200).json({ message: 'Session saved successfully' });
 });
 
-app.delete('/api/whatsapp-auth/:session', (req, res) => {
-    const { session } = req.params;
-    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.zip`);
+app.delete('/api/whatsapp-auth/:userId/:session', async (req, res) => {
+    const { userId, session } = req.params;
+    const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${userId}_${session}.zip`);
 
     if (fs.existsSync(sessionPath)) {
         fs.unlinkSync(sessionPath);
         res.status(200).json({ message: 'Session deleted successfully' });
     } else {
         res.status(404).json({ message: 'Session not found' });
+    }
+});
+
+app.post('/api/whatsapp-auth/verify', async (req, res) => {
+    const { session, userId } = req.body;
+    try {
+        const whatsappAuth = await prisma.whatsappAuth.findUnique({
+            where: {
+                session_userId: {
+                    session: session,
+                    userId: userId
+                }
+            }
+        });
+        if (whatsappAuth) {
+            res.json({ isValid: true });
+        } else {
+            res.json({ isValid: false });
+        }
+    } catch (error) {
+        console.error('Error verifying WhatsApp session:', error);
+        res.status(500).json({ error: 'Failed to verify WhatsApp session' });
     }
 });
 
