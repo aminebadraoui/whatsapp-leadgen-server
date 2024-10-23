@@ -74,7 +74,8 @@ app.get('/api/buckets', async (req, res) => {
 
 app.post('/api/buckets', async (req, res) => {
     try {
-        const { name, userId } = req.body;
+        const { name } = req.body;
+        const { userId } = req.query;
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
@@ -90,8 +91,12 @@ app.post('/api/buckets', async (req, res) => {
 app.get('/api/buckets/:bucketId/contacts', async (req, res) => {
     try {
         const { bucketId } = req.params;
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
         const contacts = await prisma.contact.findMany({
-            where: { bucketId },
+            where: { bucketId, userId },
         });
         res.json(contacts);
     } catch (error) {
@@ -171,7 +176,11 @@ app.get('/api/message-templates', async (req, res) => {
 // Create a new message template
 app.post('/api/message-templates', async (req, res) => {
     try {
-        const { title, message, userId } = req.body;
+        const { title, message } = req.body;
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
         const newTemplate = await prisma.messageTemplate.create({
             data: {
                 title,
@@ -214,7 +223,8 @@ app.get('/api/message-templates/:id', async (req, res) => {
 app.put('/api/message-templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, message, userId } = req.body;
+        const { title, message } = req.body;
+        const { userId } = req.query;
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
