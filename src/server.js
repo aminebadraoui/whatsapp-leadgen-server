@@ -286,8 +286,9 @@ app.post('/api/whatsapp-auth/save', async (req, res) => {
         }
 
         // Save the session data
+        console.log("Saving session data", data);
         const sessionPath = path.join(sessionDir, `${session}.json`);
-        fs.writeFileSync(sessionPath, data);
+        fs.writeFileSync(sessionPath, data);  // data should already be a string
 
         // Update or create the WhatsappAuth entry in the database
         await prisma.whatsappAuth.upsert({
