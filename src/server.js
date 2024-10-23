@@ -54,7 +54,12 @@ app.get('/', async (req, res) => {
 app.get('/api/buckets', async (req, res) => {
     console.log('Fetching buckets');
     try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
         const buckets = await prisma.bucket.findMany({
+            where: { userId },
             include: { _count: { select: { contacts: true } } }
         });
         res.json(buckets.map(bucket => ({
@@ -69,9 +74,12 @@ app.get('/api/buckets', async (req, res) => {
 
 app.post('/api/buckets', async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
         const newBucket = await prisma.bucket.create({
-            data: { name }
+            data: { name, userId }
         });
         res.json(newBucket);
     } catch (error) {
@@ -145,7 +153,13 @@ app.post('/api/export', async (req, res) => {
 // Get all message templates
 app.get('/api/message-templates', async (req, res) => {
     try {
-        const templates = await prisma.messageTemplate.findMany();
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const templates = await prisma.messageTemplate.findMany({
+            where: { userId }
+        });
         console.log('Templates:', templates);
         res.json(templates);
     } catch (error) {
@@ -157,9 +171,15 @@ app.get('/api/message-templates', async (req, res) => {
 // Create a new message template
 app.post('/api/message-templates', async (req, res) => {
     try {
-        const { title, message } = req.body;
+        const { title, message, userId } = req.body;
         const newTemplate = await prisma.messageTemplate.create({
-            data: { title, message },
+            data: {
+                title,
+                message,
+                user: {
+                    connect: { id: userId }
+                }
+            },
         });
         res.json(newTemplate);
     } catch (error) {
@@ -172,8 +192,12 @@ app.post('/api/message-templates', async (req, res) => {
 app.get('/api/message-templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const template = await prisma.messageTemplate.findUnique({
-            where: { id },
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const template = await prisma.messageTemplate.findFirst({
+            where: { id, userId },
         });
         if (template) {
             res.json(template);
@@ -190,12 +214,18 @@ app.get('/api/message-templates/:id', async (req, res) => {
 app.put('/api/message-templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, message } = req.body;
-        const updatedTemplate = await prisma.messageTemplate.update({
-            where: { id },
+        const { title, message, userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const updatedTemplate = await prisma.messageTemplate.updateMany({
+            where: { id, userId },
             data: { title, message },
         });
-        res.json(updatedTemplate);
+        if (updatedTemplate.count === 0) {
+            return res.status(404).json({ error: 'Message template not found or you do not have permission to update it' });
+        }
+        res.json({ message: 'Template updated successfully' });
     } catch (error) {
         console.error('Error updating message template:', error);
         res.status(500).json({ error: 'Error updating message template' });
@@ -206,9 +236,16 @@ app.put('/api/message-templates/:id', async (req, res) => {
 app.delete('/api/message-templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.messageTemplate.delete({
-            where: { id },
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const deletedTemplate = await prisma.messageTemplate.deleteMany({
+            where: { id, userId },
         });
+        if (deletedTemplate.count === 0) {
+            return res.status(404).json({ error: 'Message template not found or you do not have permission to delete it' });
+        }
         res.json({ message: 'Template deleted successfully' });
     } catch (error) {
         console.error('Error deleting message template:', error);
