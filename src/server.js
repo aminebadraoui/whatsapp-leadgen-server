@@ -280,7 +280,7 @@ app.post('/api/whatsapp-auth/save', async (req, res) => {
     const { userId, session, data } = req.body;
     try {
         // Save the session data
-        const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${userId}_${session}.json`);
+        const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.json`);
         fs.writeFileSync(sessionPath, JSON.stringify(data));
 
         // Update or create the WhatsappAuth entry in the database
