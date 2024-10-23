@@ -91,12 +91,9 @@ app.post('/api/buckets', async (req, res) => {
 app.get('/api/buckets/:bucketId/contacts', async (req, res) => {
     try {
         const { bucketId } = req.params;
-        const { userId } = req.query;
-        if (!userId) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
+
         const contacts = await prisma.contact.findMany({
-            where: { bucketId, userId },
+            where: { bucketId },
         });
         res.json(contacts);
     } catch (error) {
