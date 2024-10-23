@@ -293,7 +293,10 @@ app.post('/api/whatsapp-auth/save', async (req, res) => {
         // Update or create the WhatsappAuth entry in the database
         await prisma.whatsappAuth.upsert({
             where: {
-                userId: userId
+                userId_session: {
+                    userId: userId,
+                    session: session
+                }
             },
             update: {
                 session: session
