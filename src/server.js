@@ -279,9 +279,15 @@ app.post('/api/whatsapp-auth/verify', async (req, res) => {
 app.post('/api/whatsapp-auth/save', async (req, res) => {
     const { userId, session, data } = req.body;
     try {
+        // Ensure the directory exists
+        const sessionDir = path.join(__dirname, 'whatsapp-sessions');
+        if (!fs.existsSync(sessionDir)) {
+            fs.mkdirSync(sessionDir, { recursive: true });
+        }
+
         // Save the session data
-        const sessionPath = path.join(__dirname, 'whatsapp-sessions', `${session}.json`);
-        fs.writeFileSync(sessionPath, JSON.stringify(data));
+        const sessionPath = path.join(sessionDir, `${session}.json`);
+        fs.writeFileSync(sessionPath, data);
 
         // Update or create the WhatsappAuth entry in the database
         await prisma.whatsappAuth.upsert({
@@ -300,9 +306,11 @@ app.post('/api/whatsapp-auth/save', async (req, res) => {
         res.status(200).json({ message: 'Session saved successfully' });
     } catch (error) {
         console.error('Error saving WhatsApp session:', error);
-        res.status(500).json({ error: 'Failed to save WhatsApp session' });
+        res.status(500).json({ error: 'Failed to save WhatsApp session', details: error.message });
     }
 });
+
+
 app.listen(5000, () => {
     console.log('Server is running on port 5000');
 });
