@@ -60,14 +60,17 @@ app.get('/api/purchases', async (req, res) => {
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { purchases: true }
+        });
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const purchases = await prisma.purchase.findMany({ where: { userId: user.id } });
-        res.json(purchases);
+        res.json(user.purchases);
     } catch (error) {
         console.error('Error fetching purchases:', error);
         res.status(500).json({ error: 'Error fetching purchases' });
