@@ -51,6 +51,28 @@ app.get('/', async (req, res) => {
     res.json({ message: 'Welcome to the WhatsApp Lead Generation API' });
 });
 
+// Purchases endpoints
+
+app.get('/api/purchases', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const purchases = await prisma.purchase.findMany({ where: { userId: user.id } });
+        res.json(purchases);
+    } catch (error) {
+        console.error('Error fetching purchases:', error);
+        res.status(500).json({ error: 'Error fetching purchases' });
+    }
+});
+
 app.get('/api/buckets', async (req, res) => {
     console.log('Fetching buckets');
     try {
@@ -101,6 +123,8 @@ app.get('/api/buckets/:bucketId/contacts', async (req, res) => {
         res.status(500).json({ error: 'Error fetching bucket contacts' });
     }
 });
+
+
 
 app.post('/api/export', async (req, res) => {
     try {
