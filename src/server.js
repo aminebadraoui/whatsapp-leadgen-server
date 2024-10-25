@@ -54,6 +54,7 @@ app.get('/', async (req, res) => {
 // Purchases endpoints
 
 app.get('/api/purchases', async (req, res) => {
+    console.log('Fetching purchases');
     try {
         const { userId } = req.query;
         if (!userId) {
